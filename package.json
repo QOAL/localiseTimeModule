@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Localise times",
   "scripts": {
-    "build": "tsc",
-    "lint": "eslint -c .eslintrc.cjs src .eslintrc.cjs"
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig-cjs.json"
   },
-  "main": "build/localisetimes.js",
+  "main": "./build/cjs/localisetimes.js",
+  "module": "./build/esm/localisetimes.js",
   "keywords": [],
   "author": "QOAL",
   "license": "GPLv3",
