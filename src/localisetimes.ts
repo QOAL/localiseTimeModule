@@ -48,6 +48,8 @@ const preceedingRegEx = /[-:.,'%\d]/
 
 const oneDayInMS = 86400000
 
+const modes = "tTdDfFR".split('')
+
 interface localisedTimeInfo {
 	localisedText: string,
 	fullString: string,
@@ -56,21 +58,19 @@ interface localisedTimeInfo {
 }
 //localeStartTimeString + localeTimeString, match[_G.fullStr], match.index, match[_G.fullStr].length
 
-function localiseInput(input: string): string {
+function localiseInput(input: string, mode: string = "t", raw: boolean = false): string {
 	let newText: string
-	let mode = "t"
 
-	if (input.trim() === "help") {
-		return "Localise Times:\n"
+	if (input.trim().length === 0) {
+		return ""
 	}
 
 	//As for handling DST and short codes for time zones
 	// I feel like it's best to just call setDSTAmerica() on each call.
 	setDSTAmerica()
 
-	if (/\s[tTdDfFR]$/.test(input)) {
-		mode = input.substr(-1, 1)
-		input = input.substring(0, input.length - 2)
+	if (!modes.includes(mode)) {
+		mode = "t"
 	}
 
 	const timeInfo = spotTime(input, mode)
@@ -98,9 +98,9 @@ function localiseInput(input: string): string {
 
 	})
 
-	//Starting a message with "raw " will escape the times, so you can copy/paste it.
-	if (input.startsWith("raw ")) {
-		newText = newText.replace(/<t:/g, "\\<t:").substring(4)
+	//Setting the raw flag will escape the times, so you can copy/paste it.
+	if (raw) {
+		newText = newText.replace(/<t:/g, "\\<t:")
 	}
 
 	return newText
