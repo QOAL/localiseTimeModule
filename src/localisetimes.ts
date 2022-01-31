@@ -151,6 +151,7 @@ function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
 
 	matches.forEach(match => {
 
+		if (!match[_G.tzAbr]) { return }
 		let upperTZ: string = match[_G.tzAbr].toUpperCase()
 
 		//If a detected timezone abbreviation includes a space, then we've actually found a full name

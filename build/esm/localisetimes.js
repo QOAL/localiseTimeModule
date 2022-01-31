@@ -107,6 +107,9 @@ function spotTime(str, mode = "t") {
     const rightNow = Date.now();
     let timeInfo = [];
     matches.forEach(match => {
+        if (!match[_G.tzAbr]) {
+            return;
+        }
         let upperTZ = match[_G.tzAbr].toUpperCase();
         //If a detected timezone abbreviation includes a space, then we've actually found a full name
         let fullNameOffset;
