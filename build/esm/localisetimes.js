@@ -37,11 +37,10 @@ const whiteSpaceRegEx = /\s/g;
 const preceedingRegEx = /[-:.,'%\d]/;
 const oneDayInMS = 86400000;
 const modes = "tTdDfFR".split('');
-//localeStartTimeString + localeTimeString, match[_G.fullStr], match.index, match[_G.fullStr].length
 function localiseInput(input, mode = "t", raw = false) {
     let newText;
     if (input.trim().length === 0) {
-        return "";
+        return ["noInput", false];
     }
     //As for handling DST and short codes for time zones
     // I feel like it's best to just call setDSTAmerica() on each call.
@@ -51,7 +50,7 @@ function localiseInput(input, mode = "t", raw = false) {
     }
     const timeInfo = spotTime(input, mode);
     if (timeInfo.length === 0) {
-        return "🤷";
+        return ["noTimesDetected", false];
     }
     //Insert any text between the start of the string and the first time occurrence
     newText = input.substr(0, timeInfo[0].indexInString);
@@ -74,32 +73,33 @@ function localiseInput(input, mode = "t", raw = false) {
     if (raw) {
         newText = newText.replace(/<t:/g, "\\<t:");
     }
-    return newText;
+    return [newText, true];
 }
 function setDSTAmerica() {
-    const dateObj = new Date();
     //Work out the DST dates for the USA as part
     // of special casing for DST agnostic PT/ET
     //So first we need to get those dates (We could hard code them)
-    const thisYear = dateObj.getUTCFullYear();
-    //Begin DST
-    //2nd Sunday in March (2am local, 7am UTC)
-    let tmpDate = new Date(Date.UTC(thisYear, 2, 0, 7));
-    tmpDate.setUTCMonth(2, (7 - tmpDate.getUTCDay()) + 7);
-    const toDST = tmpDate.getTime();
-    //End of DST
-    //1st Sunday in November (2am local, 7am UTC)
-    tmpDate = new Date(Date.UTC(thisYear, 10, 0, 7));
-    tmpDate.setUTCMonth(10, 7 - tmpDate.getUTCDay());
-    const fromDST = tmpDate.getTime();
+    const thisYear = new Date().getUTCFullYear();
     const tmpNow = Date.now();
-    const dstAmerica = tmpNow > toDST && tmpNow < fromDST;
-    //Now we need to fill in the correct offset for PT/ET
-    defaultTZ.PT = dstAmerica ? defaultTZ.PDT : defaultTZ.PST;
-    defaultTZ.ET = dstAmerica ? defaultTZ.EDT : defaultTZ.EST;
-    defaultTZ.CT = dstAmerica ? defaultTZ.CDT : defaultTZ.CST;
-    defaultTZ.MT = dstAmerica ? defaultTZ.MDT : defaultTZ.MST;
-    //
+    const offsetInfo = [
+        { hour: 0, short: "ET", standard: "EST", daylight: "EDT" },
+        { hour: 1, short: "CT", standard: "CST", daylight: "CDT" },
+        { hour: 2, short: "MT", standard: "MST", daylight: "MDT" },
+        { hour: 3, short: "PT", standard: "PST", daylight: "PDT" },
+    ];
+    offsetInfo.forEach(info => {
+        //Begin DST
+        //2nd Sunday in March (2am local, 7am UTC)
+        let tmpDate = new Date(Date.UTC(thisYear, 2, 0, 7 + info.hour));
+        tmpDate.setUTCMonth(2, (7 - tmpDate.getUTCDay()) + 7);
+        const toDST = tmpDate.getTime();
+        //End of DST
+        //1st Sunday in November (2am local, 6am UTC)
+        tmpDate = new Date(Date.UTC(thisYear, 10, 0, 6 + info.hour));
+        tmpDate.setUTCMonth(10, 7 - tmpDate.getUTCDay());
+        const fromDST = tmpDate.getTime();
+        defaultTZ[info.short] = (tmpNow > toDST && tmpNow < fromDST) ? defaultTZ[info.daylight] : defaultTZ[info.standard];
+    });
 }
 function spotTime(str, mode = "t") {
     const dateObj = new Date();
@@ -212,7 +212,7 @@ function spotTime(str, mode = "t") {
                     startHour = tmpStartHour;
                 }
             }
-            //if (startHour > tHour) { console.warn("Invalid time range.", startHour, tHour); }
+            //if (startHour > tHour) { console.warn("Invalid time range.", startHour, tHour) }
             let startMins = match[_G.startMins] ? parseInt(match[_G.startMins]) : 0;
             let startMinsFromMidnight = h2m(startHour, startMins);
             let startCorrected = startMinsFromMidnight - mainOffset;

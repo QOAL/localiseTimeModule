@@ -56,13 +56,17 @@ interface localisedTimeInfo {
 	indexInString: number,
 	fullStringLength: number
 }
-//localeStartTimeString + localeTimeString, match[_G.fullStr], match.index, match[_G.fullStr].length
 
-function localiseInput(input: string, mode: string = "t", raw: boolean = false): string {
+type retVal = [
+	outputText: string,
+	success: boolean
+]
+
+function localiseInput(input: string, mode: string = "t", raw: boolean = false): retVal {
 	let newText: string
 
 	if (input.trim().length === 0) {
-		return ""
+		return ["noInput", false]
 	}
 
 	//As for handling DST and short codes for time zones
@@ -76,14 +80,14 @@ function localiseInput(input: string, mode: string = "t", raw: boolean = false):
 	const timeInfo = spotTime(input, mode)
 
 	if (timeInfo.length === 0) {
-		return "🤷"
+		return ["noTimesDetected", false]
 	}
 
 	//Insert any text between the start of the string and the first time occurrence
 	newText = input.substr(0, timeInfo[0].indexInString)
 	//Go through each time we need to replace
 	timeInfo.forEach((thisTime, t) => {
-		newText += thisTime.localisedText;
+		newText += thisTime.localisedText
 
 		//Do we have any more times to worry about?
 		if (timeInfo[t + 1]) {
@@ -103,40 +107,40 @@ function localiseInput(input: string, mode: string = "t", raw: boolean = false):
 		newText = newText.replace(/<t:/g, "\\<t:")
 	}
 
-	return newText
+	return [newText, true]
 }
 
 function setDSTAmerica(): void {
-	const dateObj = new Date()
-
 	//Work out the DST dates for the USA as part
 	// of special casing for DST agnostic PT/ET
 	//So first we need to get those dates (We could hard code them)
-	const thisYear = dateObj.getUTCFullYear()
-
-	//Begin DST
-	//2nd Sunday in March (2am local, 7am UTC)
-	let tmpDate = new Date(Date.UTC(thisYear, 2, 0, 7))
-	tmpDate.setUTCMonth(2, (7 - tmpDate.getUTCDay()) + 7)
-	const toDST = tmpDate.getTime()
-
-	//End of DST
-	//1st Sunday in November (2am local, 7am UTC)
-	tmpDate = new Date(Date.UTC(thisYear, 10, 0, 7))
-	tmpDate.setUTCMonth(10, 7 - tmpDate.getUTCDay())
-	const fromDST = tmpDate.getTime()
+	const thisYear = new Date().getUTCFullYear()
 
 	const tmpNow = Date.now()
 
-	const dstAmerica = tmpNow > toDST && tmpNow < fromDST
-	
+	const offsetInfo = [
+		{ hour: 0, short: "ET", standard: "EST", daylight: "EDT" },
+		{ hour: 1, short: "CT", standard: "CST", daylight: "CDT" },
+		{ hour: 2, short: "MT", standard: "MST", daylight: "MDT" },
+		{ hour: 3, short: "PT", standard: "PST", daylight: "PDT" },
+	]
 
-	//Now we need to fill in the correct offset for PT/ET
-	defaultTZ.PT = dstAmerica ? defaultTZ.PDT : defaultTZ.PST
-	defaultTZ.ET = dstAmerica ? defaultTZ.EDT : defaultTZ.EST
-	defaultTZ.CT = dstAmerica ? defaultTZ.CDT : defaultTZ.CST
-	defaultTZ.MT = dstAmerica ? defaultTZ.MDT : defaultTZ.MST
-	//
+	offsetInfo.forEach(info => {
+		//Begin DST
+		//2nd Sunday in March (2am local, 7am UTC)
+		let tmpDate = new Date(Date.UTC(thisYear, 2, 0, 7 + info.hour))
+		tmpDate.setUTCMonth(2, (7 - tmpDate.getUTCDay()) + 7)
+		const toDST = tmpDate.getTime()
+
+		//End of DST
+		//1st Sunday in November (2am local, 6am UTC)
+		tmpDate = new Date(Date.UTC(thisYear, 10, 0, 6 + info.hour))
+		tmpDate.setUTCMonth(10, 7 - tmpDate.getUTCDay())
+		const fromDST = tmpDate.getTime()
+
+		defaultTZ[info.short] = (tmpNow > toDST && tmpNow < fromDST) ? defaultTZ[info.daylight] : defaultTZ[info.standard]
+	
+	})
 }
 
 function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
@@ -159,11 +163,11 @@ function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
 		if (match[_G.tzAbr].indexOf(" ") !== -1) {
 			//To check if we've got a valid full name for a timezone,
 			// we need to do a little bit of work
-			const lcTZAbr = match[_G.tzAbr].toLowerCase();
+			const lcTZAbr = match[_G.tzAbr].toLowerCase()
 			const longNameInfo = Object.keys(tzInfo).find(tzK => {
 				return tzInfo[tzK].find(tzG => {
 					if (tzG.title.toLowerCase() === lcTZAbr) {
-						fullNameOffset = tzG.offset;
+						fullNameOffset = tzG.offset
 						return tzG
 					}
 				})
@@ -231,9 +235,9 @@ function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
 		let tmpTime = String(timeStamp + (rightNow > timeStamp ? oneDayInMS : 0)).substring(0, 10)
 		let localeTimeString = `<t:${tmpTime}:${mode}>`
 
-		let localeStartTimeString = '';
+		let localeStartTimeString = ''
 
-		let validMidnight = true;
+		let validMidnight = true
 		//0 is only accepted as a start hour if no meridiems are used, so we're reasonably certain it's a 24hour time.
 		if (match[_G.startHour]) {
 			if (+match[_G.startHour] === 0) {
@@ -248,7 +252,7 @@ function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
 			let startHour = +match[_G.startHour]
 
 			if (match[_G.startMeridiem]) {
-				startHour = (12 + startHour) % 12;
+				startHour = (12 + startHour) % 12
 				if (match[_G.startMeridiem][0].toLowerCase() == 'p') {
 					startHour += 12
 				}
@@ -262,7 +266,7 @@ function spotTime(str: string, mode: string = "t"): Array<localisedTimeInfo> {
 					startHour = tmpStartHour
 				}
 			}
-			//if (startHour > tHour) { console.warn("Invalid time range.", startHour, tHour); }
+			//if (startHour > tHour) { console.warn("Invalid time range.", startHour, tHour) }
 			let startMins = match[_G.startMins] ? parseInt(match[_G.startMins]) : 0
 			let startMinsFromMidnight = h2m(startHour, startMins)
 
