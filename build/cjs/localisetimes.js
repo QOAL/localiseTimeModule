@@ -162,12 +162,11 @@ function spotTime(str, mode = "t") {
         else if (match[_G.startHour] && tHour < 12 && tHour < Number(match[_G.startHour])) {
             //Non-exhaustive tHour/startHour test - This probably needs fleshing out?
             tHour += 12;
-        }
-        else if (tHour > 0 && tHour < 13 && !match[_G.meridiem] && !match[_G.mins]) {
+        } /* else if (tHour > 0 && tHour < 13 && match[_G.hours].substring(0, 1) !== "0" && !match[_G.meridiem] && !match[_G.mins]) {
             //Skip this time if the hour is 1-12, and it lacks a meridiem and minutes
             // Because it's a vague time.
-            return;
-        }
+            return
+        }*/
         // I feel like we should handle mixed 12/24 hour times, in time ranges.
         // "7pm - 21:00 UTC" looks really strange, but is currently valid.
         let tMins = match[_G.mins] ? parseInt(match[_G.mins]) : 0;
@@ -281,6 +280,10 @@ function validateTime(match, str, upperTZ, usingManualTZ = false) {
     }
     //Avoid matching font sizes
     if (match[_G.tzAbr] === 'pt' && !(match[_G.meridiem] || match[_G.mins])) {
+        return false;
+    }
+    //Avoid matching estimates that look like years
+    if (upperTZ === 'EST' && !(match[_G.meridiem] || match[_G.separator])) {
         return false;
     }
     //Avoid matching progressive resolutions
