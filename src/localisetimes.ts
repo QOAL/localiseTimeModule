@@ -327,6 +327,9 @@ function validateTime(match: RegExpMatchArray, str: string, upperTZ: string, usi
 	//blank separator: Require : or . when minutes are given
 	if (!match[_G.separator] && match[_G.mins] && !userSettings.blankSeparator) { return false }
 
+	//Minutes are required when a separator is present
+	if (match[_G.separator] && !match[_G.mins]) { return false; }
+
 	//We need to change the start of the regex to... maybe (^|\s)
 	//The issue here is that : matches the word boundary, and if the input is "30:15 gmt" then it'll match "15 gmt"
 	if (match.index && match.index > 0) {
