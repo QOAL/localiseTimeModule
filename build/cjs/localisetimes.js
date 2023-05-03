@@ -15,7 +15,7 @@ const userSettings = {
 const shortHandInfo = { "PT": "Pacific Time", "ET": "Eastern Time", "CT": "Central Time", "MT": "Mountain Time" };
 const fullTitleRegEx = "[a-z \-'áéí–-]{3,45}?(?= time) time";
 const tzaolStr = Object.keys(tzInfo_1.defaultTZ).join("|") + "|" + fullTitleRegEx;
-const timeRegex = new RegExp('\\b(?:([01]?[0-9]|2[0-3])(:|\\.)?([0-5][0-9])?(:[0-5][0-9])?(?: ?([ap]\\.?m?\\.?))?( ?)(to|until|til|and|or|[-\u2010-\u2015])\\6)?([01]?[0-9]|2[0-3])(:|\\.)?([0-5][0-9])?(:[0-5][0-9])?(?: ?([ap]\\.?m?\\.?)(?= \\w|\\b))?(?:(?: ?(' + tzaolStr + '))(( ?)(?:\\+|-)\\15[0-9]{1,2})?)?\\b', 'giu');
+const timeRegex = new RegExp('\\b(?:([01]?[0-9]|2[0-3])(:|\\.)?([0-5][0-9])?(:[0-5][0-9])?(?: ?([ap]\\.?m?\\.?))?( ?)(to|until|til|and|or|[-\u2010-\u2015])\\6)?([01]?[0-9]|2[0-3])(:|\\.)?([0-5][0-9])?(:[0-5][0-9])?(?: ?([ap]\\.?m?\\.?)(?= \\w|\\b))?(?:(?: ?(' + tzaolStr + '))(( ?)(?:\\+|-)\\15[0-9]{1,2}(?::?\\d{2})?)?)?\\b', 'giu');
 //Match group enumeration
 var _G;
 (function (_G) {
@@ -37,7 +37,14 @@ var _G;
     _G[_G["_offsetWhiteSpace"] = 15] = "_offsetWhiteSpace";
 })(_G || (_G = {}));
 const whiteSpaceRegEx = /\s/g;
-const preceedingRegEx = /[-:.,'%\d]/;
+const preceedingRegEx = /[-:.,'%\d$£€]/;
+let dateObj = new Date();
+const abbrsThatLookLikeWords = [
+    'art', 'bit', 'bot', 'cat', 'cost', 'cot',
+    'east', 'eat', 'ect', 'get', 'git', 'mart',
+    'met', 'nut', 'pet', 'tot', 'volt', 'west', 'wet',
+    'ist', 'kalt', 'gilt', 'mit', 'mut'
+];
 const oneDayInMS = 86400000;
 const modes = "tTdDfFR".split('');
 function localiseInput(input, mode = "t", raw = false) {
@@ -45,6 +52,7 @@ function localiseInput(input, mode = "t", raw = false) {
     if (input.trim().length === 0) {
         return ["noInput", false];
     }
+    dateObj = new Date();
     //As for handling DST and short codes for time zones
     // I feel like it's best to just call setDSTAmerica() on each call.
     setDSTAmerica();
@@ -102,11 +110,12 @@ function setDSTAmerica() {
         tmpDate = new Date(Date.UTC(thisYear, 10, 0, 6 + info.hour));
         tmpDate.setUTCMonth(10, 7 - tmpDate.getUTCDay());
         const fromDST = tmpDate.getTime();
-        tzInfo_1.defaultTZ[info.short] = (tmpNow > toDST && tmpNow < fromDST) ? tzInfo_1.defaultTZ[info.daylight] : tzInfo_1.defaultTZ[info.standard];
+        const isDaylight = (tmpNow > toDST && tmpNow < fromDST);
+        const usedTimeZone = isDaylight ? info.daylight : info.standard;
+        tzInfo_1.defaultTZ[info.short] = tzInfo_1.defaultTZ[usedTimeZone];
     });
 }
 function spotTime(str, mode = "t") {
-    const dateObj = new Date();
     const matches = Array.from(str.matchAll(timeRegex));
     const rightNow = Date.now();
     let timeInfo = [];
@@ -121,27 +130,27 @@ function spotTime(str, mode = "t") {
             //To check if we've got a valid full name for a timezone,
             // we need to do a little bit of work
             const lcTZAbr = match[_G.tzAbr].toLowerCase();
-            const longNameInfo = Object.keys(tzInfo_1.tzInfo).find(tzK => {
-                return tzInfo_1.tzInfo[tzK].find(tzG => {
-                    if (tzG.title.toLowerCase() === lcTZAbr) {
-                        fullNameOffset = tzG.offset;
-                        return tzG;
-                    }
-                });
+            //Check if this is a shorthand time zone first
+            const shortHandFound = Object.keys(shortHandInfo).find(shK => {
+                if (shortHandInfo[shK].toLowerCase() === lcTZAbr) {
+                    match[_G.tzAbr] = shK;
+                    upperTZ = shK;
+                    return true;
+                }
             });
-            if (longNameInfo && fullNameOffset) {
-                match[_G.tzAbr] = longNameInfo;
-                upperTZ = match[_G.tzAbr].toUpperCase();
-            }
-            else {
-                //We didn't find the timezone in that list, but it might be a short hand name
-                Object.keys(shortHandInfo).find(shK => {
-                    if (shortHandInfo[shK].toLowerCase() === lcTZAbr) {
-                        match[_G.tzAbr] = shK;
-                        upperTZ = shK;
-                        return true;
-                    }
+            if (!shortHandFound) {
+                const longNameInfo = Object.keys(tzInfo_1.tzInfo).find(tzK => {
+                    return tzInfo_1.tzInfo[tzK].find(tzG => {
+                        if (tzG.title.toLowerCase() === lcTZAbr) {
+                            fullNameOffset = tzG.offset;
+                            return tzG;
+                        }
+                    });
                 });
+                if (longNameInfo && fullNameOffset !== undefined) {
+                    match[_G.tzAbr] = longNameInfo;
+                    upperTZ = match[_G.tzAbr].toUpperCase();
+                }
             }
         }
         if (!fullNameOffset) {
@@ -174,17 +183,19 @@ function spotTime(str, mode = "t") {
         let hourOffset = 0;
         //Sometimes people write a tz and then +X (like UTC+1)
         if (match[_G.offset]) {
-            hourOffset = parseInt(match[_G.offset].replace(whiteSpaceRegEx, '')) * 60;
+            let timeOffset = match[_G.offset].replace(whiteSpaceRegEx, '').split(':');
+            if (timeOffset.length === 1 && (timeOffset[0].length === 4 || timeOffset[0].length === 5)) {
+                timeOffset = [
+                    timeOffset[0].substring(0, timeOffset[0].length - 2),
+                    timeOffset[0].substring(timeOffset[0].length - 2)
+                ];
+            }
+            hourOffset = parseInt(timeOffset[0]) * 60 + (timeOffset[1] ? parseInt(timeOffset[1]) : 0);
         }
         const mainOffset = (fullNameOffset ?? tzInfo_1.defaultTZ[upperTZ]) + hourOffset;
         let tCorrected = tMinsFromMidnight - mainOffset - dateObj.getTimezoneOffset();
-        if (tCorrected < 0) {
-            tCorrected += 1440;
-        }
         //Build the localised time
-        let tmpExplode = m2h(tCorrected);
-        let tmpDate = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), tmpExplode[0], tmpExplode[1], match[_G.seconds] ? Number(match[_G.seconds].substring(1)) : 0);
-        let timeStamp = tmpDate.getTime();
+        let timeStamp = buildLocalisedDate(tCorrected, match[_G.seconds]);
         let tmpTime = String(timeStamp + (rightNow > timeStamp ? oneDayInMS : 0)).substring(0, 10);
         let localeTimeString = `<t:${tmpTime}:${mode}>`;
         let localeStartTimeString = '';
@@ -220,15 +231,10 @@ function spotTime(str, mode = "t") {
             let startMinsFromMidnight = h2m(startHour, startMins);
             let startCorrected = startMinsFromMidnight - mainOffset;
             startCorrected -= dateObj.getTimezoneOffset();
-            if (startCorrected < 0) {
-                startCorrected += 1440;
-            }
-            //Build the localised time
-            let tmpExplode = m2h(startCorrected);
-            let tmpDate = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), tmpExplode[0], tmpExplode[1], match[_G.startSeconds] ? Number(match[_G.startSeconds].substring(1)) : 0);
             //It would be nice to avoid including the meridiem if it's the same as the main time
             let timeSeparator = match[_G.timeSeparator].length === 1 ? "–" : match[_G.timeSeparator];
-            timeStamp = tmpDate.getTime();
+            //Build the localised time
+            timeStamp = buildLocalisedDate(startCorrected, match[_G.startSeconds]);
             tmpTime = String(timeStamp + (rightNow > timeStamp ? oneDayInMS : 0)).substring(0, 10);
             localeStartTimeString = `<t:${tmpTime}:${mode}> ${timeSeparator} `;
             //Should we capture the user defined separator and reuse it? - Yes, and we are now.
@@ -242,6 +248,14 @@ function spotTime(str, mode = "t") {
         });
     });
     return timeInfo;
+}
+function buildLocalisedDate(timeMins, seconds = false) {
+    if (timeMins < 0) {
+        timeMins += 1440;
+    }
+    const tmpExplode = m2h(timeMins);
+    const newDate = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), tmpExplode[0], tmpExplode[1], seconds ? Number(seconds.substring(1)) : 0);
+    return newDate.getTime();
 }
 function m2h(mins) {
     mins = Math.abs(mins);
@@ -287,7 +301,7 @@ function validateTime(match, str, upperTZ, usingManualTZ = false) {
         return false;
     }
     //Avoid matching estimates that look like years
-    if (upperTZ === 'EST' && !(match[_G.meridiem] || match[_G.separator])) {
+    if (upperTZ === 'EST' && !(match[_G.meridiem] || match[_G.separator]) && parseInt(match[_G.hours] + match[_G.mins]) > 14) {
         return false;
     }
     //Avoid matching progressive resolutions
@@ -295,15 +309,17 @@ function validateTime(match, str, upperTZ, usingManualTZ = false) {
     if (match[_G.mins] && !match[_G.separator] && match[_G.meridiem] === 'p' && match[_G.tzAbr] !== 'IST') {
         return false;
     }
-    //Avoid cat and eat false positives
-    // Require either the meridiem or minutes & separator
-    const requiresMeridiemOrMinsWithLowercase = [
-        'bit', 'cat', 'eat', 'cost', 'art',
-        'ist', 'kalt', 'gilt', 'mit', 'mut', 'met'
-    ];
-    if (requiresMeridiemOrMinsWithLowercase.includes(match[_G.tzAbr]) &&
-        !(match[_G.meridiem] || (match[_G.mins] && match[_G.separator]))) {
-        return false;
+    if (abbrsThatLookLikeWords.includes(match[_G.tzAbr])) {
+        //Avoid cat and eat false positives
+        // Require either the meridiem or minutes & separator
+        if (!(match[_G.meridiem] || (match[_G.mins] && match[_G.separator]))) {
+            return false;
+        }
+        //Avoid falsely matching "3 a bit"
+        // Require either the meridiem or minutes & separator
+        if (match[_G.meridiem] === 'a' && !(match[_G.mins] && match[_G.separator])) {
+            return false;
+        }
     }
     if (usingManualTZ) {
         //Manually converted times will easily match numbers without this
